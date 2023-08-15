@@ -13,6 +13,7 @@ pub fn sort(
 ) -> DynamicImage {
     let (width, height) = img.dimensions();
     let method = calculate_method(method);
+    let kind = sort_algo_by_kind(kind);
 
     let sort_algo = match direction {
         SortDirection::Horizontal => sort_horizontal,
@@ -24,7 +25,7 @@ pub fn sort(
         img,
         ret.as_mut_rgba8().unwrap(),
         luminance_threshold,
-        kind,
+        &kind,
         &method,
     );
 
@@ -52,16 +53,26 @@ fn calc_luminance(
     ret_img_buffer.put_pixel(pos.0 as _, pos.1 as _, rgba.to_owned());
 }
 
+fn sort_algo_by_kind(
+    kind: SortKind,
+) -> impl Fn(&(f32, Rgba<u8>), &(f32, Rgba<u8>)) -> std::cmp::Ordering {
+    match kind {
+        SortKind::LeftToRight => {
+            |left: &(f32, Rgba<u8>), right: &(f32, Rgba<u8>)| left.0.total_cmp(&right.0)
+        }
+        SortKind::RightToLeft => {
+            |left: &(f32, Rgba<u8>), right: &(f32, Rgba<u8>)| right.0.total_cmp(&left.0)
+        }
+    }
+}
+
 fn sort_and_put_remaining_pixels(
     ret_img_buffer: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     mut pxs: Vec<(f32, Rgba<u8>)>,
     positions: Vec<(usize, usize)>,
-    kind: SortKind,
+    kind: &dyn Fn(&(f32, Rgba<u8>), &(f32, Rgba<u8>)) -> std::cmp::Ordering,
 ) {
-    pxs.sort_by(|left, right| match kind {
-        SortKind::LeftToRight => left.0.total_cmp(&right.0),
-        SortKind::RightToLeft => right.0.total_cmp(&left.0),
-    });
+    pxs.sort_by(kind);
 
     for idx in 0..pxs.len() {
         let (col, row) = positions[idx];
@@ -75,7 +86,7 @@ fn sort_vertical(
     img: DynamicImage,
     ret_img_buffer: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     luminance_threshold: Threshold,
-    kind: SortKind,
+    kind: &dyn Fn(&(f32, Rgba<u8>), &(f32, Rgba<u8>)) -> std::cmp::Ordering,
     method: &dyn Fn(&Rgba<u8>) -> f32,
 ) {
     let (width, height) = img.dimensions();
@@ -104,7 +115,7 @@ fn sort_vertical(
             );
         }
 
-        sort_and_put_remaining_pixels(ret_img_buffer, pxs, positions, kind.clone());
+        sort_and_put_remaining_pixels(ret_img_buffer, pxs, positions, kind);
     }
 }
 
@@ -112,7 +123,7 @@ fn sort_horizontal(
     img: DynamicImage,
     ret_img_buffer: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     luminance_threshold: Threshold,
-    kind: SortKind,
+    kind: &dyn Fn(&(f32, Rgba<u8>), &(f32, Rgba<u8>)) -> std::cmp::Ordering,
     method: &dyn Fn(&Rgba<u8>) -> f32,
 ) {
     for (row, pixels) in img.to_rgba8().rows().enumerate() {
@@ -131,7 +142,7 @@ fn sort_horizontal(
             );
         }
 
-        sort_and_put_remaining_pixels(ret_img_buffer, pxs, positions, kind.clone());
+        sort_and_put_remaining_pixels(ret_img_buffer, pxs, positions, kind);
     }
 }
 
